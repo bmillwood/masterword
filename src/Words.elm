@@ -1,12 +1,13 @@
-module Words exposing (newWord)
+module Words exposing (all, newWord)
 
 import Random
+import Set exposing (Set)
 
 newWord : Cmd (List Char)
 newWord = Random.generate String.toList genWord
 
-genWord : Random.Generator String
-genWord =
+all : Set String
+all =
   [ "ABETS"
   , "ABHOR"
   , "ABIDE"
@@ -3083,4 +3084,11 @@ genWord =
   , "ZOMBI"
   , "ZONAL"
   , "ZONED"
-  ] |> Random.uniform "ZONES"
+  , "ZONES"
+  ] |> Set.fromList
+
+genWord : Random.Generator String
+genWord =
+  case Set.toList all of
+    [] -> Random.constant "OHNO"
+    word :: words -> Random.uniform word words

@@ -5,6 +5,7 @@ import Browser.Dom
 import Html exposing (Html)
 import Html.Attributes
 import Html.Events
+import Set exposing (Set)
 import Task
 
 import Words
@@ -12,10 +13,14 @@ import Zipper
 
 type alias Flags = ()
 
+type alias Config =
+  { mustGuessWords : Bool }
+
 type alias Game =
   { secret : List Char
   , guesses : List (List Char)
   , nextGuess : List (Maybe Char)
+  , config : Config
   }
 
 type Model
@@ -31,6 +36,7 @@ alreadyGuessed { secret, guesses, nextGuess } =
 
 type Msg
   = DoNothing
+  | SetConfig Config
   | StartNewGame
   | GameStarted (List Char)
   | UpdateGuess Int (Maybe Char)
@@ -45,15 +51,20 @@ init () = (Init, startNewGame)
 type DomId
   = GuessCell Int
   | Submit
+  | ConfigMustGuessWords
 
 domIdToString : DomId -> String
 domIdToString di =
   case di of
     GuessCell i -> "guessCell" ++ String.fromInt i
     Submit -> "submitButton"
+    ConfigMustGuessWords -> "configMustGuessWords"
 
 idAttr : DomId -> Html.Attribute a
 idAttr di = Html.Attributes.id (domIdToString di)
+
+forId : DomId -> Html.Attribute a
+forId di = Html.Attributes.for (domIdToString di)
 
 tryFocuses : List DomId -> Cmd Msg
 tryFocuses dis =
@@ -164,6 +175,17 @@ view model =
             [ Html.Attributes.style "margin" "auto" ]
             keyboardRows
         , Html.p []
+            [ Html.input
+                [ idAttr ConfigMustGuessWords
+                , Html.Attributes.type_ "checkbox"
+                , Html.Events.onCheck (\b -> SetConfig { mustGuessWords = b })
+                ]
+                []
+            , Html.label
+                [ forId ConfigMustGuessWords ]
+                [ Html.text "Guesses must be in the word list" ]
+            ]
+        , Html.p []
             [ Html.a
                 [ Html.Attributes.href "https://github.com/bmillwood/masterword" ]
                 [ Html.text "source on github" ]
@@ -181,12 +203,17 @@ update : Msg -> Model -> (Model, Cmd Msg)
 update msg model =
   case msg of
     DoNothing -> (model, Cmd.none)
+    SetConfig config ->
+      case model of
+        Init -> (model, Cmd.none)
+        Playing p -> ( Playing { p | config = config }, Cmd.none )
     StartNewGame -> (model, startNewGame)
     GameStarted newWord ->
       ( Playing
           { secret = newWord
           , guesses = []
           , nextGuess = List.map (always Nothing) newWord
+          , config = { mustGuessWords = False }
           }
       , Cmd.none
       )
@@ -235,17 +262,21 @@ update msg model =
           case allJust p.nextGuess of
             Nothing -> (model, Cmd.none)
             Just guess ->
-              ( Playing
-                  { p
-                  | guesses = guess :: p.guesses
-                  , nextGuess =
-                      List.map2
-                        (\g s -> if g == s then Just s else Nothing)
-                        guess
-                        p.secret
-                  }
-              , Cmd.none
-              )
+              if p.config.mustGuessWords
+              && not (Set.member (String.fromList guess) Words.all)
+              then (model, Cmd.none)
+              else
+                ( Playing
+                    { p
+                    | guesses = guess :: p.guesses
+                    , nextGuess =
+                        List.map2
+                          (\g s -> if g == s then Just s else Nothing)
+                          guess
+                          p.secret
+                    }
+                , Cmd.none
+                )
 
 subscriptions : Model -> Sub Msg
 subscriptions _ = Sub.none
