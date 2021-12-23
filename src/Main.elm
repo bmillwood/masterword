@@ -33,11 +33,26 @@ startNewGame = Cmd.map GameStarted Words.newWord
 init : Flags -> (Model, Cmd Msg)
 init () = (Init, startNewGame)
 
-guessCellId : Int -> String
-guessCellId n = "guessCell" ++ String.fromInt n
+type DomId
+  = GuessCell Int
+  | Submit
 
-submitId : String
-submitId = "submitButton"
+domIdToString : DomId -> String
+domIdToString di =
+  case di of
+    GuessCell i -> "guessCell" ++ String.fromInt i
+    Submit -> "submitButton"
+
+idAttr : DomId -> Html.Attribute a
+idAttr di = Html.Attributes.id (domIdToString di)
+
+tryFocuses : List DomId -> Cmd Msg
+tryFocuses dis =
+  List.foldr
+    (\di task -> Task.onError (\_ -> task) (Browser.Dom.focus (domIdToString di)))
+    (Task.fail ())
+    dis
+  |> Task.attempt (\_ -> DoNothing)
 
 viewGuess : { secret : List Char, guess : List Char } -> Html Msg
 viewGuess { secret, guess } =
@@ -68,7 +83,7 @@ view model =
           Html.td
             []
             [ Html.input
-                [ Html.Attributes.id (guessCellId index)
+                [ idAttr (GuessCell index)
                 , Html.Attributes.value
                     (Maybe.withDefault "" (Maybe.map String.fromChar c))
                 , Html.Attributes.style "width" "1em"
@@ -88,7 +103,7 @@ view model =
         []
         [ Html.table [] rows
         , Html.button
-            [ Html.Attributes.id submitId
+            [ idAttr Submit
             , Html.Events.onClick SubmitGuess
             ]
             [ Html.text "Guess" ]
@@ -130,10 +145,7 @@ update msg model =
                   Zipper.toList (before, newChar, after)
           in
           ( Playing { p | nextGuess = newGuess }
-          , Task.onError
-              (\_ -> Browser.Dom.focus submitId)
-              (Browser.Dom.focus (guessCellId (updateIndex + 1)))
-            |> Task.attempt (\_ -> DoNothing)
+          , tryFocuses [ GuessCell (updateIndex + 1), Submit ]
           )
     SubmitGuess ->
       case model of
