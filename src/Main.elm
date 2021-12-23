@@ -124,8 +124,10 @@ view model =
             ((if done then [] else [ nextGuessRow ]) ++ List.map guessRow guesses)
       in
       Html.div
-        []
-        [ Html.table [] rows
+        [ Html.Attributes.style "text-align" "center" ]
+        [ Html.table
+            [ Html.Attributes.style "margin" "auto" ]
+            rows
         , Html.button
             [ idAttr Submit
             , Html.Events.onClick (if done then StartNewGame else SubmitGuess)
