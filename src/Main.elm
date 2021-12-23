@@ -66,6 +66,9 @@ tryFocuses dis =
 correctStyle : Html.Attribute a
 correctStyle = Html.Attributes.style "background-color" "lightgreen"
 
+misplacedStyle : Html.Attribute a
+misplacedStyle = Html.Attributes.style "background-color" "yellow"
+
 viewGuess : { secret : List Char, guess : List Char } -> Html Msg
 viewGuess { secret, guess } =
   let
@@ -74,7 +77,7 @@ viewGuess { secret, guess } =
         (if s == g
         then [ correctStyle ]
         else if List.member g secret
-        then [ Html.Attributes.style "background-color" "yellow" ]
+        then [ misplacedStyle ]
         else [])
         [ Html.text (String.fromChar g) ]
   in
@@ -127,6 +130,25 @@ view model =
         rows =
           List.reverse
             ((if done then [] else [ nextGuessRow ]) ++ List.map guessRow guesses)
+        indicatorForChar c =
+          if List.member (Just c) guessed
+          then [ correctStyle ]
+          else if not (List.any (List.member c) guesses)
+          then []
+          else if List.member c secret
+          then [ misplacedStyle ]
+          else [ Html.Attributes.style "color" "lightgrey" ]
+        keyboardIndicatorCell c =
+          Html.td
+            (indicatorForChar c)
+            [ Html.text (String.fromChar c) ]
+        keyboardRows =
+          List.map
+            (Html.tr [] << List.map keyboardIndicatorCell << String.toList)
+            [ "QWERTYUIOP"
+            , "ASDFGHJKL"
+            , "ZXCVBNM"
+            ]
       in
       Html.div
         [ Html.Attributes.style "text-align" "center" ]
@@ -138,6 +160,9 @@ view model =
             , Html.Events.onClick (if done then StartNewGame else SubmitGuess)
             ]
             [ if done then Html.text "New" else Html.text "Guess" ]
+        , Html.table
+            [ Html.Attributes.style "margin" "auto" ]
+            keyboardRows
         , Html.p []
             [ Html.a
                 [ Html.Attributes.href "https://github.com/bmillwood/masterword" ]
