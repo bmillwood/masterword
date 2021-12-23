@@ -2,22 +2,54 @@ module Main exposing (main)
 
 import Browser
 import Html exposing (Html)
+import Html.Events
+
+import Words
 
 type alias Flags = ()
-type alias Model = ()
-type alias Msg = ()
+
+type Model
+  = Init
+  | Playing
+      { secret : List Char
+      , guesses : List (List Char)
+      }
+
+type Msg
+  = StartNewGame
+  | GameStarted (List Char)
+
+startNewGame : Cmd Msg
+startNewGame = Cmd.map GameStarted Words.newWord
 
 init : Flags -> (Model, Cmd Msg)
-init () = ((), Cmd.none)
+init () = (Init, startNewGame)
 
 view : Model -> Html Msg
-view () = Html.div [] []
+view model =
+  Html.div
+    []
+    [ case model of
+        Init ->
+          Html.button
+            [ Html.Events.onClick StartNewGame ]
+            [ Html.text "Start new game" ]
+        Playing { secret, guesses } ->
+          Html.text (String.fromList secret)
+    ]
+
 
 update : Msg -> Model -> (Model, Cmd Msg)
-update () () = ((), Cmd.none)
+update msg model =
+  case msg of
+    StartNewGame -> (model, startNewGame)
+    GameStarted newWord ->
+      ( Playing { secret = newWord, guesses = [] }
+      , Cmd.none
+      )
 
 subscriptions : Model -> Sub Msg
-subscriptions () = Sub.none
+subscriptions _ = Sub.none
 
 main =
   Browser.element
