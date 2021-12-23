@@ -131,6 +131,11 @@ view model =
             , Html.Events.onClick (if done then StartNewGame else SubmitGuess)
             ]
             [ if done then Html.text "New" else Html.text "Guess" ]
+        , Html.p []
+            [ Html.a
+                [ Html.Attributes.href "https://github.com/bmillwood/masterword" ]
+                [ Html.text "source on github" ]
+            ]
         ]
 
 allJust : List (Maybe a) -> Maybe (List a)
