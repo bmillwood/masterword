@@ -36,6 +36,23 @@ init () = (Init, startNewGame)
 guessCellId : Int -> String
 guessCellId n = "guessCell" ++ String.fromInt n
 
+submitId : String
+submitId = "submitButton"
+
+viewGuess : { secret : List Char, guess : List Char } -> Html Msg
+viewGuess { secret, guess } =
+  let
+    cellForChar s g =
+      Html.td
+        (if s == g
+        then [ Html.Attributes.style "background-color" "lightgreen" ]
+        else if List.member g secret
+        then [ Html.Attributes.style "background-color" "yellow" ]
+        else [])
+        [ Html.text (String.fromChar g) ]
+  in
+  Html.tr [] (List.map2 cellForChar secret guess)
+
 view : Model -> Html Msg
 view model =
   case model of
@@ -44,6 +61,7 @@ view model =
       let
         useInput v =
           String.right 1 v
+          |> String.toUpper
           |> String.toList
           |> List.head
         nextGuessChar index c =
@@ -63,17 +81,16 @@ view model =
           Html.tr
             []
             (List.indexedMap nextGuessChar nextGuess)
-        guessRow guess =
-          Html.tr
-            []
-            (List.map (\c -> Html.td [] [ Html.text (String.fromChar c) ]) guess)
+        guessRow guess = viewGuess { secret = secret, guess = guess }
         rows = List.reverse (nextGuessRow :: List.map guessRow guesses)
       in
       Html.div
         []
         [ Html.table [] rows
         , Html.button
-            [ Html.Events.onClick SubmitGuess ]
+            [ Html.Attributes.id submitId
+            , Html.Events.onClick SubmitGuess
+            ]
             [ Html.text "Guess" ]
         ]
 
@@ -113,9 +130,10 @@ update msg model =
                   Zipper.toList (before, newChar, after)
           in
           ( Playing { p | nextGuess = newGuess }
-          , Task.attempt
-              (\_ -> DoNothing)
+          , Task.onError
+              (\_ -> Browser.Dom.focus submitId)
               (Browser.Dom.focus (guessCellId (updateIndex + 1)))
+            |> Task.attempt (\_ -> DoNothing)
           )
     SubmitGuess ->
       case model of
