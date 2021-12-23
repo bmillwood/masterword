@@ -12,13 +12,22 @@ import Zipper
 
 type alias Flags = ()
 
+type alias Game =
+  { secret : List Char
+  , guesses : List (List Char)
+  , nextGuess : List (Maybe Char)
+  }
+
 type Model
   = Init
-  | Playing
-      { secret : List Char
-      , guesses : List (List Char)
-      , nextGuess : List (Maybe Char)
-      }
+  | Playing Game
+
+alreadyGuessed : Game -> List (Maybe Char)
+alreadyGuessed { secret, guesses, nextGuess } =
+  case guesses of
+    [] -> List.map (always Nothing) secret
+    guess :: _ ->
+      List.map2 (\g s -> if g == s then Just g else Nothing) guess secret
 
 type Msg
   = DoNothing
@@ -75,7 +84,7 @@ view : Model -> Html Msg
 view model =
   case model of
     Init -> Html.div [] [ Html.text "Game is starting (or failed to start)" ]
-    Playing { secret, guesses, nextGuess } ->
+    Playing ({ secret, guesses, nextGuess } as game) ->
       let
         cellWidth = Html.Attributes.style "width" "1em"
         useInput v =
@@ -100,13 +109,9 @@ view model =
                 ]
                 []
             ]
-        alreadyGuessed =
-          case guesses of
-            ls :: _ ->
-              List.map2 (\lc s -> if lc == s then Just lc else Nothing) ls secret
-            [] -> List.map (always Nothing) secret
+        guessed = alreadyGuessed game
         done =
-          case allJust alreadyGuessed of
+          case allJust guessed of
             Just _ -> True
             Nothing -> False
         nextGuessCell index (c, s, a) =
@@ -117,7 +122,7 @@ view model =
           Html.tr
             []
             (List.indexedMap nextGuessCell
-              (List.map3 (\g s a -> (g, s, a)) nextGuess secret alreadyGuessed))
+              (List.map3 (\g s a -> (g, s, a)) nextGuess secret guessed))
         guessRow guess = viewGuess { secret = secret, guess = guess }
         rows =
           List.reverse
@@ -165,32 +170,38 @@ update msg model =
         Init -> (Init, Cmd.none)
         Playing p ->
           let
+            nextGuessWithCorrect =
+              List.map2 (\g ag -> (g, ag)) p.nextGuess (alreadyGuessed p)
             zipperElt =
-              Zipper.ofList (List.indexedMap (\i x -> (i, x)) p.nextGuess)
+              List.indexedMap (\i (g, ag) -> (i, g, ag)) nextGuessWithCorrect
+              |> Zipper.ofList
               |> List.drop updateIndex
               |> List.head
-            delete =
+            isDelete =
               case newChar of
-                Nothing -> True
                 Just _ -> False
-            values = List.map (\(i, x) -> x)
-            (newGuess, newId) =
+                Nothing -> True
+            guesses = List.map (\(i, g, ag) -> g)
+            indexOfIncorrect (i, _, ag) =
+              case ag of
+                Nothing -> Just (GuessCell i)
+                Just _ -> Nothing
+            (newGuess, focuses) =
               case zipperElt of
-                Nothing -> (p.nextGuess, GuessCell 0)
-                Just (before, (atIndex, _), after) ->
-                  ( Zipper.toList (values before, newChar, values after)
-                  , List.filterMap
-                      (\(i, x) ->
-                        case x of
-                          Just _ -> Nothing
-                          Nothing -> Just (GuessCell i))
-                      (if delete then before else after)
-                    |> List.head
-                    |> Maybe.withDefault (if delete then GuessCell 0 else Submit)
+                Nothing -> (p.nextGuess, [])
+                Just (before, (atIndex, _, _), after) ->
+                  ( Zipper.toList (guesses before, newChar, guesses after)
+                  , if isDelete
+                    then List.filterMap indexOfIncorrect before |> List.take 1
+                    else
+                      List.filterMap indexOfIncorrect after
+                      |> List.head
+                      |> Maybe.map List.singleton
+                      |> Maybe.withDefault [ Submit ]
                   )
           in
           ( Playing { p | nextGuess = newGuess }
-          , tryFocuses [ newId ]
+          , tryFocuses focuses
           )
     SubmitGuess ->
       case model of
