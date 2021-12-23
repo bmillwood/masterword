@@ -54,13 +54,16 @@ tryFocuses dis =
     dis
   |> Task.attempt (\_ -> DoNothing)
 
+correctStyle : Html.Attribute a
+correctStyle = Html.Attributes.style "background-color" "lightgreen"
+
 viewGuess : { secret : List Char, guess : List Char } -> Html Msg
 viewGuess { secret, guess } =
   let
     cellForChar s g =
       Html.td
         (if s == g
-        then [ Html.Attributes.style "background-color" "lightgreen" ]
+        then [ correctStyle ]
         else if List.member g secret
         then [ Html.Attributes.style "background-color" "yellow" ]
         else [])
@@ -74,39 +77,60 @@ view model =
     Init -> Html.div [] [ Html.text "Game is starting (or failed to start)" ]
     Playing { secret, guesses, nextGuess } ->
       let
+        cellWidth = Html.Attributes.style "width" "1em"
         useInput v =
           String.right 1 v
           |> String.toUpper
           |> String.toList
           |> List.head
-        nextGuessChar index c =
+        alreadyGuessedCell c =
+          Html.td
+            [ cellWidth, correctStyle ]
+            [ Html.text (String.fromChar c) ]
+        yetToGuessCell index c =
           Html.td
             []
             [ Html.input
                 [ idAttr (GuessCell index)
                 , Html.Attributes.value
                     (Maybe.withDefault "" (Maybe.map String.fromChar c))
-                , Html.Attributes.style "width" "1em"
+                , cellWidth
                 , Html.Events.onInput
                     (\v -> UpdateGuess index (useInput v))
                 ]
                 []
             ]
+        alreadyGuessed =
+          case guesses of
+            ls :: _ ->
+              List.map2 (\lc s -> if lc == s then Just lc else Nothing) ls secret
+            [] -> List.map (always Nothing) secret
+        done =
+          case allJust alreadyGuessed of
+            Just _ -> True
+            Nothing -> False
+        nextGuessCell index (c, s, a) =
+          case a of
+            Just cc -> alreadyGuessedCell cc
+            Nothing -> yetToGuessCell index c
         nextGuessRow =
           Html.tr
             []
-            (List.indexedMap nextGuessChar nextGuess)
+            (List.indexedMap nextGuessCell
+              (List.map3 (\g s a -> (g, s, a)) nextGuess secret alreadyGuessed))
         guessRow guess = viewGuess { secret = secret, guess = guess }
-        rows = List.reverse (nextGuessRow :: List.map guessRow guesses)
+        rows =
+          List.reverse
+            ((if done then [] else [ nextGuessRow ]) ++ List.map guessRow guesses)
       in
       Html.div
         []
         [ Html.table [] rows
         , Html.button
             [ idAttr Submit
-            , Html.Events.onClick SubmitGuess
+            , Html.Events.onClick (if done then StartNewGame else SubmitGuess)
             ]
-            [ Html.text "Guess" ]
+            [ if done then Html.text "New" else Html.text "Guess" ]
         ]
 
 allJust : List (Maybe a) -> Maybe (List a)
@@ -135,17 +159,31 @@ update msg model =
         Playing p ->
           let
             zipperElt =
-              Zipper.ofList p.nextGuess
+              Zipper.ofList (List.indexedMap (\i x -> (i, x)) p.nextGuess)
               |> List.drop updateIndex
               |> List.head
-            newGuess =
+            delete =
+              case newChar of
+                Nothing -> True
+                Just _ -> False
+            values = List.map (\(i, x) -> x)
+            (newGuess, newId) =
               case zipperElt of
-                Nothing -> p.nextGuess
-                Just (before, _, after) ->
-                  Zipper.toList (before, newChar, after)
+                Nothing -> (p.nextGuess, GuessCell 0)
+                Just (before, (atIndex, _), after) ->
+                  ( Zipper.toList (values before, newChar, values after)
+                  , List.filterMap
+                      (\(i, x) ->
+                        case x of
+                          Just _ -> Nothing
+                          Nothing -> Just (GuessCell i))
+                      (if delete then before else after)
+                    |> List.head
+                    |> Maybe.withDefault (if delete then GuessCell 0 else Submit)
+                  )
           in
           ( Playing { p | nextGuess = newGuess }
-          , tryFocuses [ GuessCell (updateIndex + 1), Submit ]
+          , tryFocuses [ newId ]
           )
     SubmitGuess ->
       case model of
@@ -157,7 +195,11 @@ update msg model =
               ( Playing
                   { p
                   | guesses = guess :: p.guesses
-                  , nextGuess = List.map (always Nothing) guess
+                  , nextGuess =
+                      List.map2
+                        (\g s -> if g == s then Just s else Nothing)
+                        guess
+                        p.secret
                   }
               , Cmd.none
               )
