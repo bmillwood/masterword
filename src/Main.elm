@@ -200,6 +200,16 @@ view model =
                 [ Html.text "Guesses must be in the word list" ]
             ]
         , Html.p []
+            [ Html.span [ correctStyle ] [ Html.text "A" ]
+            , Html.text " means \"correct letter in correct place\""
+            , Html.br [] []
+            , Html.span [ misplacedStyle ] [ Html.text "A" ]
+            , Html.text " means \"correct letter in incorrect place\""
+            ]
+        , Html.p []
+            [ Html.text "Words don't contain repeated letters (e.g. no FLEES)."
+            ]
+        , Html.p []
             [ Html.a
                 [ Html.Attributes.href "https://github.com/bmillwood/masterword" ]
                 [ Html.text "source on github" ]
