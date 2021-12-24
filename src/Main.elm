@@ -98,7 +98,7 @@ view : Model -> Html Msg
 view model =
   case model of
     Init -> Html.div [] [ Html.text "Game is starting (or failed to start)" ]
-    Playing ({ secret, guesses, nextGuess } as game) ->
+    Playing ({ secret, guesses, nextGuess, config } as game) ->
       let
         cellWidth = Html.Attributes.style "width" "1em"
         useInput v =
@@ -110,17 +110,31 @@ view model =
           Html.td
             [ cellWidth, correctStyle ]
             [ Html.text (String.fromChar c) ]
+        cannotSubmit =
+          config.mustGuessWords
+          && case allJust nextGuess of
+               Nothing -> False
+               Just word -> not (Set.member (String.fromList word) Words.all)
         yetToGuessCell index c =
+          let
+            alwaysAttributes =
+              [ idAttr (GuessCell index)
+              , Html.Attributes.type_ "text"
+              , Html.Attributes.value
+                  (Maybe.withDefault "" (Maybe.map String.fromChar c))
+              , cellWidth
+              , Html.Events.onInput
+                  (\v -> UpdateGuess index (useInput v))
+              ]
+            sometimesAttributes =
+              if cannotSubmit
+              then [ Html.Attributes.style "background-color" "lightpink" ]
+              else []
+          in
           Html.td
             []
             [ Html.input
-                [ idAttr (GuessCell index)
-                , Html.Attributes.value
-                    (Maybe.withDefault "" (Maybe.map String.fromChar c))
-                , cellWidth
-                , Html.Events.onInput
-                    (\v -> UpdateGuess index (useInput v))
-                ]
+                (alwaysAttributes ++ sometimesAttributes)
                 []
             ]
         guessed = alreadyGuessed game
